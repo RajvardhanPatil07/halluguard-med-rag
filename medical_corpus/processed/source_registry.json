@@ -1,0 +1,23 @@
+{
+  "primary_source": "MedlinePlus",
+  "sources": [
+    {
+      "name": "MedlinePlus",
+      "notes": "Use exported MedlinePlus health topic XML as the seed corpus.",
+      "raw_dir": "D:\\College Projects\\Asep\\asep2_project\\medical_corpus\\raw\\medlineplus",
+      "source_type": "consumer_health"
+    },
+    {
+      "name": "WHO",
+      "notes": "Reserved for later public health fact sheets and disease pages.",
+      "raw_dir": "D:\\College Projects\\Asep\\asep2_project\\medical_corpus\\raw\\who",
+      "source_type": "public_health"
+    },
+    {
+      "name": "NIH MedGen",
+      "notes": "Reserved for disease aliases and identifiers, not primary patient-facing answers.",
+      "raw_dir": "D:\\College Projects\\Asep\\asep2_project\\medical_corpus\\raw\\nih_medgen",
+      "source_type": "ontology"
+    }
+  ]
+}

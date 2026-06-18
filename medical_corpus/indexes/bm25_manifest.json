@@ -1,0 +1,7 @@
+{
+  "chunks_count": 8281,
+  "chunks_path": "D:\\College Projects\\Asep\\asep2_project\\medical_corpus\\processed\\corpus_chunks.jsonl",
+  "index_path": "D:\\College Projects\\Asep\\asep2_project\\medical_corpus\\indexes\\bm25_corpus.pkl",
+  "ok": true,
+  "tokenizer": "regex:[a-z0-9]+"
+}

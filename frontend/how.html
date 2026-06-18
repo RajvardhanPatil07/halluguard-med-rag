@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>How It Works - HalluGuard-Med</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<nav class="navbar">
+  <div class="container navbar__inner">
+    <a href="index.html" class="navbar__brand">
+      <div class="navbar__brand-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.955 11.955 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"/>
+        </svg>
+      </div>
+      HalluGuard<span class="accent">-Med</span>
+    </a>
+    <div class="navbar__links">
+      <a href="index.html" class="navbar__link">Home</a>
+      <a href="assistant.html" class="navbar__link">Assistant</a>
+      <a href="how.html" class="navbar__link active">How It Works</a>
+      <a href="assistant.html" class="navbar__cta">Launch Assistant</a>
+    </div>
+    <button class="navbar__hamburger" id="hamburger" aria-label="Menu">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"/>
+      </svg>
+    </button>
+  </div>
+  <div class="navbar__mobile" id="mobile-menu">
+    <a href="index.html" class="navbar__link">Home</a>
+    <a href="assistant.html" class="navbar__link">Assistant</a>
+    <a href="how.html" class="navbar__link active">How It Works</a>
+    <a href="assistant.html" class="navbar__cta">Launch Assistant</a>
+  </div>
+</nav>
+
+<main>
+  <section class="how-hero">
+    <div class="container">
+      <div class="how-hero__inner">
+        <div class="how-hero__badge">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375"/>
+          </svg>
+          Current Architecture
+        </div>
+        <h1>How HalluGuard-Med Works</h1>
+        <p>Each assistant response moves through generation, retrieval, verification, hallucination checks, and final safety reporting.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="pipeline architecture-pipeline">
+    <div class="container">
+      <div class="architecture-flow">
+        <article class="architecture-step">
+          <div class="architecture-step__number">01</div>
+          <h3>User Query/Image Upload</h3>
+          <p>The user submits a medical question and may attach an image for visual context.</p>
+        </article>
+        <article class="architecture-step">
+          <div class="architecture-step__number">02</div>
+          <h3>MedGemma Analysis</h3>
+          <p>MedGemma produces the initial medical answer from the submitted input.</p>
+        </article>
+        <article class="architecture-step">
+          <div class="architecture-step__number">03</div>
+          <h3>Medical Knowledge Retrieval</h3>
+          <p>Qdrant Cloud RAG retrieves relevant medical evidence for verification.</p>
+        </article>
+        <article class="architecture-step">
+          <div class="architecture-step__number">04</div>
+          <h3>Evidence Verification</h3>
+          <p>Claims are checked against retrieved sources, citations, and support scores.</p>
+        </article>
+        <article class="architecture-step">
+          <div class="architecture-step__number">05</div>
+          <h3>Hallucination Detection</h3>
+          <p>Unsupported claims, contradictions, and source conflicts are flagged.</p>
+        </article>
+        <article class="architecture-step">
+          <div class="architecture-step__number">06</div>
+          <h3>Confidence &amp; Risk Scoring</h3>
+          <p>The safety layer assigns confidence, risk level, and review guidance.</p>
+        </article>
+        <article class="architecture-step architecture-step--final">
+          <div class="architecture-step__number">07</div>
+          <h3>Final Safe Medical Report</h3>
+          <p>The interface presents the answer with findings, evidence, risks, and recommendations.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="cta-band">
+    <div class="container">
+      <div class="cta-band__inner">
+        <h2>Review a medical response</h2>
+        <p>Open the assistant to see generation, evidence, confidence, and risk reporting in one place.</p>
+        <a href="assistant.html" class="btn-white">
+          Open the Assistant
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"/>
+          </svg>
+        </a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="footer">
+  <div class="container footer__inner">
+    <div class="footer__brand">
+      <svg class="footer__brand-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" width="16" height="16">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.955 11.955 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"/>
+      </svg>
+      <strong>HalluGuard-Med</strong> - AI Medical Verification System
+    </div>
+    <nav class="footer__links">
+      <a href="index.html">Home</a>
+      <a href="assistant.html">Assistant</a>
+      <a href="how.html">How It Works</a>
+    </nav>
+  </div>
+</footer>
+
+<script src="js/script.js"></script>
+</body>
+</html>

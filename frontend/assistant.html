@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Assistant - HalluGuard-Med</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+  <style>
+    /* Assistant report detail styles */
+    .checks-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+    }
+    @media (max-width: 640px) {
+      .checks-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    .radiology-panel {
+      margin-top: 14px;
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      overflow: hidden;
+      background: #0f1117;
+      color: #e5e7eb;
+      font-size: 13px;
+    }
+
+    .radiology-panel__header {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 14px;
+      font-weight: 600;
+      font-size: 12px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      background: #1a1f2e;
+      border-bottom: 1px solid #2d3748;
+      color: #94a3b8;
+    }
+
+    .radiology-panel__header svg {
+      width: 14px;
+      height: 14px;
+      flex-shrink: 0;
+    }
+
+    .radiology-panel__error {
+      padding: 14px;
+      color: #f87171;
+      font-size: 12px;
+    }
+
+    .radiology-critical {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin: 12px 14px 4px;
+      padding: 10px 12px;
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      border-radius: 7px;
+      color: #fca5a5;
+      font-size: 12px;
+      font-weight: 500;
+      line-height: 1.5;
+    }
+
+    .radiology-critical svg {
+      width: 14px;
+      height: 14px;
+      flex-shrink: 0;
+      margin-top: 1px;
+      color: #ef4444;
+    }
+
+    .radiology-normal {
+      padding: 6px 14px 2px;
+      font-size: 11px;
+      color: #64748b;
+    }
+
+    .radiology-bars {
+      padding: 8px 14px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .radiology-bar__row {
+      display: grid;
+      grid-template-columns: 180px 1fr 46px;
+      align-items: center;
+      gap: 10px;
+    }
+
+    @media (max-width: 600px) {
+      .radiology-bar__row {
+        grid-template-columns: 130px 1fr 40px;
+      }
+    }
+
+    .radiology-bar__label {
+      font-size: 12px;
+      color: #cbd5e1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .radiology-bar__critical-mark {
+      font-size: 10px;
+      font-weight: 700;
+      color: #ef4444;
+      flex-shrink: 0;
+    }
+
+    .radiology-bar__track {
+      height: 7px;
+      background: #1e293b;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .radiology-bar__fill {
+      height: 100%;
+      border-radius: 4px;
+      transition: width 0.4s ease;
+    }
+
+    .radiology-bar__pct {
+      font-size: 12px;
+      font-weight: 600;
+      text-align: right;
+    }
+
+    .radiology-no-findings {
+      padding: 10px 0;
+      color: #64748b;
+      font-size: 12px;
+      text-align: center;
+    }
+
+    .risk-score {
+      margin: 6px 0 8px;
+      font-size: 12px;
+      color: #475569;
+      font-weight: 600;
+    }
+
+    .evidence-panel {
+      margin-top: 14px;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      overflow: hidden;
+      background: #fff;
+    }
+
+    .evidence-panel__title {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 9px 12px;
+      border-bottom: 1px solid #e5e7eb;
+      font-size: 12px;
+      font-weight: 700;
+      color: #334155;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .evidence-panel__title svg {
+      width: 14px;
+      height: 14px;
+    }
+
+    .evidence-panel__items {
+      padding: 10px 12px;
+      display: grid;
+      gap: 9px;
+    }
+
+    .citation-item {
+      display: grid;
+      gap: 4px;
+    }
+
+    .citation-item__meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      font-size: 11px;
+      color: #64748b;
+    }
+
+    .citation-item__meta strong {
+      color: #0f172a;
+    }
+
+    .citation-item__text {
+      font-size: 12px;
+      line-height: 1.45;
+      color: #334155;
+    }
+  </style>
+</head>
+<body class="assistant-page">
+
+<!-- ===== NAVBAR ===== -->
+<nav class="navbar">
+  <div class="container navbar__inner">
+    <a href="index.html" class="navbar__brand">
+      <div class="navbar__brand-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.955 11.955 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"/>
+        </svg>
+      </div>
+      HalluGuard<span class="accent">-Med</span>
+    </a>
+    <div class="navbar__links">
+      <a href="index.html"     class="navbar__link">Home</a>
+      <a href="assistant.html" class="navbar__link active">Assistant</a>
+      <a href="how.html"       class="navbar__link">How It Works</a>
+      <a href="assistant.html" class="navbar__cta">Launch Assistant</a>
+    </div>
+    <button class="navbar__hamburger" id="hamburger" aria-label="Menu">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"/>
+      </svg>
+    </button>
+  </div>
+  <div class="navbar__mobile" id="mobile-menu">
+    <a href="index.html"     class="navbar__link">Home</a>
+    <a href="assistant.html" class="navbar__link active">Assistant</a>
+    <a href="how.html"       class="navbar__link">How It Works</a>
+    <a href="assistant.html" class="navbar__cta">Launch Assistant</a>
+  </div>
+</nav>
+
+<!-- ===== MAIN ===== -->
+<main class="assistant-main">
+
+  <!-- Chat window -->
+  <div class="chat-window">
+
+    <!-- Messages area -->
+    <div class="chat-messages" id="chat-messages">
+      <div class="msg-ai">
+        <div class="msg-ai__inner">
+          <div class="msg-ai__header">
+            <div class="msg-ai__avatar">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" width="15" height="15">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.955 11.955 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"/>
+              </svg>
+            </div>
+            <span class="msg-ai__label">Assistant</span>
+          </div>
+          <div class="msg-ai__response">
+Welcome to HalluGuard-Med.
+
+Ask a medical question or upload a medical image to receive AI-assisted analysis, evidence verification, confidence scoring, and safety-focused medical guidance.
+          </div>
+        </div>
+      </div>
+      <div class="suggestion-chips">
+        <button class="suggestion-chip">What are symptoms of pneumonia?</button>
+        <button class="suggestion-chip">Explain Type 2 diabetes treatment</button>
+        <button class="suggestion-chip">Describe hypertension management</button>
+      </div>
+    </div><!-- /chat-messages -->
+
+    <!-- Image preview -->
+    <div class="image-preview-area" id="image-preview-area">
+      <div class="img-thumb-wrap">
+        <img class="img-thumb" id="preview-img" src="" alt="Image preview" />
+        <button class="img-thumb-remove" id="remove-img" title="Remove image">x</button>
+      </div>
+    </div>
+
+    <!-- Backend URL -->
+    <div class="backend-config">
+      <div class="backend-config__row">
+        <input
+          type="url"
+          id="backend-url"
+          placeholder="Paste Kaggle ngrok backend URL"
+          aria-label="Backend URL"
+        />
+        <button type="button" id="save-backend-url">Save</button>
+      </div>
+      <div class="backend-config__status" id="backend-status">Using local backend</div>
+    </div>
+
+    <!-- Input bar -->
+    <div class="chat-input-bar">
+      <input type="file" id="file-input" accept="image/*" class="sr-only" />
+      <button class="chat-input-btn" id="upload-btn" title="Upload X-ray or medical image">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" width="18" height="18">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"/>
+        </svg>
+      </button>
+      <textarea
+        id="chat-input"
+        placeholder="Enter a medical question, describe symptoms, or ask about a condition..."
+        rows="2"
+      ></textarea>
+      <button class="chat-send-btn" id="send-btn" disabled title="Send">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" width="17" height="17">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.269 20.876L5.999 12zm0 0h7.5"/>
+        </svg>
+      </button>
+    </div>
+
+  </div><!-- /chat-window -->
+
+  <p class="chat-disclaimer">
+    HalluGuard-Med is a verification layer, not a replacement for professional medical advice. Always consult a licensed physician.
+  </p>
+
+</main>
+
+<!-- ===== FOOTER ===== -->
+<footer class="footer">
+  <div class="container footer__inner">
+    <div class="footer__brand">
+      <svg class="footer__brand-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" width="16" height="16">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.955 11.955 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"/>
+      </svg>
+      <strong>HalluGuard-Med</strong> - AI Medical Verification System
+    </div>
+    <nav class="footer__links">
+      <a href="index.html">Home</a>
+      <a href="assistant.html">Assistant</a>
+      <a href="how.html">How It Works</a>
+    </nav>
+  </div>
+</footer>
+
+<script src="js/script.js"></script>
+</body>
+</html>

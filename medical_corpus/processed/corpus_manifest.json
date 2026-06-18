@@ -1,0 +1,9 @@
+{
+  "chunks_count": 8281,
+  "chunks_path": "D:\\College Projects\\Asep\\asep2_project\\medical_corpus\\processed\\corpus_chunks.jsonl",
+  "generated_at": "2026-05-31T12:29:33.575367+00:00",
+  "schema_version": "halluguard-med-corpus-v1",
+  "sources": [
+    "MedlinePlus"
+  ]
+}

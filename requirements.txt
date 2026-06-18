@@ -1,0 +1,12 @@
+fastapi
+uvicorn[standard]
+python-multipart
+python-dotenv
+torch>=2.6
+Pillow
+numpy
+torchxrayvision
+rank-bm25
+google-generativeai
+qdrant-client
+reportlab

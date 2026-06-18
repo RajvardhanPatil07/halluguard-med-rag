@@ -1,0 +1,15 @@
+{
+  "batch_size": 5,
+  "checkpoint_path": "D:\\College Projects\\Asep\\asep2_project\\medical_corpus\\indexes\\qdrant_checkpoint_halluguard_med_corpus_v1.json",
+  "chunks_count": 8281,
+  "chunks_path": "D:\\College Projects\\Asep\\asep2_project\\medical_corpus\\processed\\corpus_chunks.jsonl",
+  "collection": "halluguard_med_corpus_v1",
+  "embed_requests_per_minute": 60,
+  "embedding_dim": 768,
+  "embedding_model": "gemini-embedding-001",
+  "indexed_count": 8281,
+  "indexed_this_run": 136,
+  "ok": true,
+  "qdrant_url": "http://localhost:6333",
+  "skipped_already_indexed": 8145
+}
