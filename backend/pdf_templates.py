@@ -67,6 +67,10 @@ def _percent(value: Any) -> str:
         return str(value)
     if 0 <= numeric <= 1:
         numeric *= 100
+    if 0 < numeric < 0.1:
+        return "<0.1%"
+    if 99.9 < numeric < 100:
+        return ">99.9%"
     return f"{numeric:.1f}%"
 
 

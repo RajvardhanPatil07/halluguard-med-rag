@@ -60,7 +60,10 @@ class ConfidenceFusion:
             ]
             unsupported = [item for item in claim_results if item.status in {"unsupported", "insufficient"}]
             claim_support_ratio = (len(supported) + (0.5 * len(weak_supported))) / len(claim_results)
-            citation_coverage = len([item for item in claim_results if item.best_citation_id]) / len(claim_results)
+            citation_coverage = len([
+                item for item in claim_results
+                if item.status == "supported" and item.best_citation_id
+            ]) / len(claim_results)
         else:
             contradicted = []
             soft_contradicted = []
@@ -73,7 +76,10 @@ class ConfidenceFusion:
         high_conflicts = [conflict for conflict in conflicts if conflict.severity == "high"]
         contradiction_penalty = min(
             1.0,
-            (0.4 * len(high_conflicts)) + (0.15 * (len(conflicts) - len(high_conflicts))) + (0.35 * len(contradicted)),
+            (0.4 * len(high_conflicts))
+            + (0.15 * (len(conflicts) - len(high_conflicts)))
+            + (0.35 * len(contradicted))
+            + max([item.contradiction_score for item in claim_results] or [0.0]),
         )
 
         entity_alignment = self._entity_alignment(evidence_scores)
@@ -86,6 +92,11 @@ class ConfidenceFusion:
             - (0.25 * contradiction_penalty)
         )
         confidence = round(max(0.0, min(confidence, 1.0)), 4)
+        if unsupported:
+            confidence = min(confidence, 0.69)
+        elif weak_supported:
+            confidence = min(confidence, 0.71)
+        confidence = round(confidence, 4)
         breakdown = {
             "rag_signal": round(rag_signal, 4),
             "mean_evidence": round(mean_evidence, 4),

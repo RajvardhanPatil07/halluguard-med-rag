@@ -16,7 +16,12 @@ try:
         get_claim_verification_status,
     )
     from .confidence_fusion import ConfidenceFusion
-    from .evidence_scoring import EvidenceScore, EvidenceScorer, evidence_scores_to_dicts
+    from .evidence_scoring import (
+        EvidenceScore,
+        EvidenceScorer,
+        condition_aligned_with_diseases,
+        evidence_scores_to_dicts,
+    )
     from .medical_entities import MedicalEntityExtractor, entities_to_dicts
     from .radiology_analyzer import format_finding_assessment
     from .source_conflicts import SourceConflict, SourceConflictDetector, conflicts_to_dicts
@@ -30,7 +35,12 @@ except ImportError:
         get_claim_verification_status,
     )
     from confidence_fusion import ConfidenceFusion
-    from evidence_scoring import EvidenceScore, EvidenceScorer, evidence_scores_to_dicts
+    from evidence_scoring import (
+        EvidenceScore,
+        EvidenceScorer,
+        condition_aligned_with_diseases,
+        evidence_scores_to_dicts,
+    )
     from medical_entities import MedicalEntityExtractor, entities_to_dicts
     from radiology_analyzer import format_finding_assessment
     from source_conflicts import SourceConflict, SourceConflictDetector, conflicts_to_dicts
@@ -48,9 +58,12 @@ def _build_claims_summary(claim_rows: list[dict[str, Any]]) -> dict[str, Any]:
     total = len(claim_rows)
     by_status: dict[str, int] = {}
     support_scores = []
+    supported_with_citations = 0
     for row in claim_rows:
         status = str(row.get("status") or "unknown")
         by_status[status] = by_status.get(status, 0) + 1
+        if status == "supported" and row.get("best_citation_id"):
+            supported_with_citations += 1
         try:
             support_scores.append(float(row.get("support_score") or 0.0))
         except (TypeError, ValueError):
@@ -63,6 +76,7 @@ def _build_claims_summary(claim_rows: list[dict[str, Any]]) -> dict[str, Any]:
         "insufficient": by_status.get("insufficient", 0),
         "contradicted": by_status.get("contradicted", 0),
         "mean_support": round(sum(support_scores) / len(support_scores), 4) if support_scores else 0.0,
+        "citation_coverage": round(supported_with_citations / total, 4) if total else 0.0,
         "by_status": by_status,
     }
 
@@ -109,7 +123,11 @@ def run_pre_generation_safety(query: str, retrieval: dict[str, Any]) -> dict[str
         }
         for row in evidence_score_rows:
             hit = next((item for item in hits if item.get("citation_id") == row["citation_id"]), None)
-            if hit and hit.get("condition", "").lower() not in disease_terms and row.get("entity_overlap", 0) < 0.75:
+            if (
+                hit
+                and condition_aligned_with_diseases(hit, disease_terms) is False
+                and row.get("entity_overlap", 0) < 0.75
+            ):
                 row["passed"] = False
                 row.setdefault("reasons", []).append("condition_not_aligned_with_detected_disease")
     filtered_hits = _hits_by_passed_score(hits, evidence_score_rows)
@@ -181,6 +199,15 @@ def run_post_generation_safety(
         warnings.append("Clinical safety layer recommends refusing this answer.")
     elif not confidence.should_answer:
         warnings.append("Clinical safety layer found insufficient support for a confident answer.")
+    unsupported_claims = [
+        row for row in claim_rows
+        if row.get("status") in {"unsupported", "insufficient", "contradicted"}
+    ]
+    if unsupported_claims:
+        warnings.append("Some generated claims were not strongly supported by retrieved medical evidence.")
+    claims_summary = _build_claims_summary(claim_rows)
+    if claims_summary.get("total") and claims_summary.get("citation_coverage", 0.0) < 1.0:
+        warnings.append("Some generated claims were not linked to retrieved citations.")
 
     log_event(
         "safety",
@@ -197,7 +224,7 @@ def run_post_generation_safety(
     return {
         "query": query,
         "claims": claims_to_dicts(claims),
-        "claims_summary": _build_claims_summary(claim_rows),
+        "claims_summary": claims_summary,
         "claim_verification": claim_rows,
         "confidence": confidence.to_dict(),
         "warnings": warnings,

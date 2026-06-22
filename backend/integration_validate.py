@@ -17,16 +17,12 @@ try:
     from .radiology_analyzer import analyze_image
     from .rag_pipeline import run_rag_pipeline
     from .runtime_checks import get_runtime_status
-    from .safety_gate import enforce_answer_policy
-    from .safety_pipeline import run_post_generation_safety
     from .verification import verify_response
 except ImportError:
     from medgemma import generate_response, get_model_status
     from radiology_analyzer import analyze_image
     from rag_pipeline import run_rag_pipeline
     from runtime_checks import get_runtime_status
-    from safety_gate import enforce_answer_policy
-    from safety_pipeline import run_post_generation_safety
     from verification import verify_response
 
 
@@ -57,36 +53,16 @@ def validate_text_pipeline(query: str, run_generation: bool) -> dict[str, Any]:
     except Exception as exc:
         return _result(False, stage="generation", rag_score=rag_result.get("rag_score"), error=str(exc))
 
-    safety = run_post_generation_safety(
-        query=query,
-        answer=response,
-        rag_result=rag_result,
-        precheck=rag_result.get("safety_precheck", {}),
-    )
-    verification = verify_response(
-        query,
-        response,
-        rag_result=rag_result,
-        safety_result=safety,
-    )
-    answer_gate = enforce_answer_policy(
-        query=query,
-        candidate_answer=response,
-        verification=verification,
-        rag_result=rag_result,
-        safety_result=safety,
-    )
+    verification = verify_response(query, response, rag_result=rag_result)
     return _result(
         True,
         stage="full_text",
         rag_score=verification.get("rag_score"),
         risk_tier=verification.get("risk_tier"),
         risk_score=verification.get("risk_score"),
-        answer_policy=answer_gate.get("answer_policy"),
         nli=verification.get("nli"),
         citations_count=len(verification.get("citations", [])),
-        candidate_response_chars=len(response),
-        final_response_chars=len(answer_gate.get("final_response", "")),
+        response_chars=len(response),
     )
 
 

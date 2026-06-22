@@ -10,16 +10,34 @@ from typing import Any
 
 try:
     from .medical_entities import MedicalEntity, MedicalEntityExtractor, entities_to_dicts
+    from .nli_verifier import (
+        NLI_CONTRADICTION_THRESHOLD,
+        NLI_SUPPORT_THRESHOLD,
+        NliUnavailableError,
+        disabled_metadata,
+        get_nli_status,
+        verify_claim_against_evidence,
+    )
+    from .structured_log import log_event
 except ImportError:
     from medical_entities import MedicalEntity, MedicalEntityExtractor, entities_to_dicts
+    from nli_verifier import (
+        NLI_CONTRADICTION_THRESHOLD,
+        NLI_SUPPORT_THRESHOLD,
+        NliUnavailableError,
+        disabled_metadata,
+        get_nli_status,
+        verify_claim_against_evidence,
+    )
+    from structured_log import log_event
 
 
 MAX_CLAIMS = 6
 MAX_EVIDENCE_PER_CLAIM = 4
 MAX_EVIDENCE_WINDOWS_PER_CLAIM = 3
 MAX_EVIDENCE_WINDOW_CHARS = 520
-ENTAILMENT_THRESHOLD = 0.55
-CONTRADICTION_THRESHOLD = 0.75
+ENTAILMENT_THRESHOLD = NLI_SUPPORT_THRESHOLD
+CONTRADICTION_THRESHOLD = NLI_CONTRADICTION_THRESHOLD
 CONTRADICTION_MARGIN = 0.10
 SUPPORTED_THRESHOLD = 0.60
 WEAK_SUPPORT_THRESHOLD = 0.40
@@ -43,7 +61,7 @@ LOW_VALUE_IMAGE_CLAIM_PATTERNS = [
     r"\bwould suggest other diagnoses\b",
 ]
 
-VERIFICATION_ENGINE = "local_lexical_entity_overlap"
+VERIFICATION_ENGINE = "deberta_v3_mnli_with_overlap_fallback"
 
 
 def classify_support_status(support_score: float) -> str:
@@ -227,6 +245,16 @@ PHRASE_SYNONYMS = {
     ],
 }
 
+GENERIC_CONDITION_TERMS = {
+    "cancer",
+    "disease",
+    "disorder",
+    "condition",
+    "syndrome",
+    "problem",
+    "failure",
+}
+
 SECTION_LABEL_RE = re.compile(
     r"^\s*(?:#{1,6}\s*)?(?:overview|key points?|what the evidence supports|"
     r"safety notes(?: or when to seek medical care)?|warning signs?|symptoms?|"
@@ -261,6 +289,7 @@ class ClaimVerificationResult:
     support_breakdown: dict[str, float] = field(default_factory=dict)
     matched_concepts: list[str] = field(default_factory=list)
     missing_concepts: list[str] = field(default_factory=list)
+    nli: dict[str, Any] = field(default_factory=disabled_metadata)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -430,9 +459,15 @@ def _condition_alignment_score(claim: str, hit: dict[str, Any], primary_conditio
         return 0.5
     claim_terms = _content_terms(claim)
     condition_terms = _condition_terms(condition)
+    raw_overlap = claim_terms & condition_terms
+    meaningful_overlap = raw_overlap - GENERIC_CONDITION_TERMS
     if condition in primary_conditions:
-        return 1.0
-    if condition_terms and claim_terms & condition_terms:
+        if meaningful_overlap:
+            return 1.0
+        if raw_overlap:
+            return 0.0
+        return 0.5
+    if condition_terms and meaningful_overlap:
         return 0.9
     return 0.0
 
@@ -563,7 +598,20 @@ class ClinicalClaimVerifier:
                 for claim in claims
             ]
 
-        return self._verify_with_overlap(claims, evidence_hits)
+        try:
+            # DeBERTa-v3 MNLI replaces the previous rule-based core verifier.
+            # If the model cannot load or run, the legacy overlap verifier below
+            # is retained as a fail-open server-safe fallback.
+            return self._verify_with_nli(claims, evidence_hits)
+        except NliUnavailableError as exc:
+            log_event(
+                "nli",
+                "claim_verification_fallback",
+                "warning",
+                error=str(exc),
+                fallback="local_lexical_entity_overlap",
+            )
+            return self._verify_with_overlap(claims, evidence_hits)
 
     def _best_lexical_support(
         self,
@@ -668,7 +716,10 @@ class ClinicalClaimVerifier:
             best_breakdown: dict[str, float] = {}
             best_matched: list[str] = []
             best_missing: list[str] = []
-            candidate_hits = self._select_evidence_for_claim(claim, evidence_hits) or evidence_hits[:MAX_EVIDENCE_PER_CLAIM]
+            candidate_hits = self._select_evidence_for_claim(claim, evidence_hits)
+            if not candidate_hits:
+                results.append(self._insufficient_result(claim, "no_condition_aligned_evidence"))
+                continue
             for hit in candidate_hits:
                 citation_id = str(hit.get("citation_id", ""))
                 premise_text = hit.get("_premise_text") or hit.get("text", "")
@@ -729,6 +780,51 @@ class ClinicalClaimVerifier:
             ))
         return results
 
+    def _verify_with_nli(
+        self,
+        claims: list[ClinicalClaim],
+        evidence_hits: list[dict[str, Any]],
+    ) -> list[ClaimVerificationResult]:
+        results: list[ClaimVerificationResult] = []
+        for claim in claims:
+            candidate_hits = self._select_evidence_for_claim(claim, evidence_hits)[:3]
+            if not candidate_hits:
+                results.append(self._insufficient_result(claim, "no_condition_aligned_evidence"))
+                continue
+
+            nli_result = verify_claim_against_evidence(
+                claim.text,
+                candidate_hits,
+                max_evidence=3,
+            )
+            if nli_result.label == "supported":
+                status = "supported"
+                reason = "nli_entailment"
+            elif nli_result.label == "contradicted":
+                status = "contradicted"
+                reason = "nli_contradiction"
+            else:
+                status = "unsupported"
+                reason = "nli_neutral_or_unsupported"
+
+            results.append(ClaimVerificationResult(
+                claim_id=claim.claim_id,
+                claim=claim.text,
+                status=status,
+                support_score=nli_result.entailment,
+                contradiction_score=nli_result.contradiction,
+                best_citation_id=nli_result.citation_id,
+                best_evidence=nli_result.premise,
+                reason=reason,
+                support_breakdown={
+                    "nli_entailment": nli_result.entailment,
+                    "nli_contradiction": nli_result.contradiction,
+                    "nli_neutral": nli_result.neutral,
+                },
+                nli=nli_result.to_metadata(),
+            ))
+        return results
+
     def _insufficient_result(self, claim: ClinicalClaim, reason: str) -> ClaimVerificationResult:
         return ClaimVerificationResult(
             claim_id=claim.claim_id,
@@ -752,11 +848,13 @@ def claim_results_to_dicts(results: list[ClaimVerificationResult]) -> list[dict[
 
 
 def get_claim_verification_status() -> dict[str, Any]:
+    nli_status = get_nli_status()
     return {
-        "nli_available": False,
-        "nli_model_loaded": False,
-        "nli_load_error": None,
+        "nli_available": nli_status.get("available", False),
+        "nli_model_loaded": nli_status.get("model_loaded", False),
+        "nli_load_error": nli_status.get("load_error"),
+        "nli_model": nli_status.get("model"),
         "verification_engine": VERIFICATION_ENGINE,
-        "entailment_threshold": ENTAILMENT_THRESHOLD,
-        "contradiction_threshold": CONTRADICTION_THRESHOLD,
+        "entailment_threshold": nli_status.get("entailment_threshold", ENTAILMENT_THRESHOLD),
+        "contradiction_threshold": nli_status.get("contradiction_threshold", CONTRADICTION_THRESHOLD),
     }

@@ -331,13 +331,20 @@ def _score_signal(value: float | None, cap: float | None = None) -> float:
     return min(score, 1.0)
 
 
+def _rrf_signal(hit: RetrievalHit) -> float:
+    max_possible = 2.0 / (RAG_RRF_K + 1)
+    if hit.rrf_score and max_possible:
+        return _score_signal(float(hit.rrf_score) / max_possible)
+    return _score_signal(hit.normalized_score)
+
+
 def calculate_dynamic_rag_score(hits: list[RetrievalHit]) -> float:
     if not hits:
         return 0.0
 
     top_hit = hits[0]
-    top_rrf = _score_signal(top_hit.normalized_score)
-    mean_rrf = sum(_score_signal(hit.normalized_score) for hit in hits) / len(hits)
+    top_rrf = _rrf_signal(top_hit)
+    mean_rrf = sum(_rrf_signal(hit) for hit in hits) / len(hits)
     both_legs = sum(
         1
         for hit in hits
@@ -729,9 +736,8 @@ def _rerank_exact_condition_matches(query: str, hits: list[RetrievalHit]) -> lis
         reverse=True,
     )
     reranked = []
-    for rank, (adjusted_score, hit) in enumerate(ranked_with_scores, start=1):
+    for rank, (_adjusted_score, hit) in enumerate(ranked_with_scores, start=1):
         hit.rank = rank
-        hit.normalized_score = round(max(0.0, min(1.0, adjusted_score)), 4)
         reranked.append(hit)
     return reranked
 
@@ -748,8 +754,6 @@ def _prefer_primary_condition_hits(query: str, hits: list[RetrievalHit]) -> list
     ordered = related + unrelated
     for rank, hit in enumerate(ordered, start=1):
         hit.rank = rank
-        if hit in unrelated:
-            hit.normalized_score = round(max(0.0, hit.normalized_score * 0.55), 4)
     return ordered
 
 
@@ -776,9 +780,7 @@ def _rerank_topical_matches(query: str, hits: list[RetrievalHit]) -> list[Retrie
 
     ranked = sorted(hits, key=topical_score, reverse=True)
     for rank, hit in enumerate(ranked, start=1):
-        adjusted = topical_score(hit)
         hit.rank = rank
-        hit.normalized_score = round(max(hit.normalized_score, min(1.0, adjusted)), 4)
     return ranked
 
 
@@ -798,7 +800,21 @@ def hybrid_retrieve(query: str) -> dict[str, Any]:
         retrieval_query = _expand_medical_query(query)
         bm25_results = _bm25_search(retrieval_query, RAG_TOP_K_EACH)
         dense_results = _dense_search(retrieval_query, RAG_TOP_K_EACH)
-        hits = _rerank_retrieval_hits(query, rrf_fuse(bm25_results, dense_results, RAG_TOP_K_FINAL))
+        fused_hits = rrf_fuse(bm25_results, dense_results, RAG_TOP_K_FINAL)
+        hits = _rerank_retrieval_hits(query, fused_hits)
+        if not hits and fused_hits:
+            hits = fused_hits
+            for rank, hit in enumerate(hits, start=1):
+                hit.rank = rank
+            log_event(
+                "retrieval",
+                "rerank_returned_no_hits_using_fused_fallback",
+                "warning",
+                query_chars=len(query),
+                fused_count=len(fused_hits),
+                disease_terms=sorted(_query_disease_terms(query)),
+                fallback_citations=[hit.citation_id for hit in hits],
+            )
         if not hits:
             raise RetrievalError("Hybrid RAG returned no evidence")
         score = calculate_dynamic_rag_score(hits)

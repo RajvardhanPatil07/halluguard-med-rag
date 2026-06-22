@@ -84,6 +84,16 @@ CONTRAINDICATION_PATTERNS = [
     r"\bunsafe\b",
 ]
 
+DISEASE_ALIASES = {
+    "chronic obstructive pulmonary disease": "copd",
+    "chronic kidney disease": "chronic kidney disease",
+    "ckd": "chronic kidney disease",
+    "myocardial infarction": "heart attack",
+    "mi": "heart attack",
+    "cerebrovascular accident": "stroke",
+    "cva": "stroke",
+}
+
 BROAD_TAG_TERMS = {
     "children",
     "children and teenagers",
@@ -227,6 +237,8 @@ class MedicalEntityExtractor:
         for drug in DRUG_TERMS:
             normalized = "paracetamol" if drug in {"acetaminophen", "tylenol"} else drug
             add(drug, ENTITY_DRUG, normalized, 0.88)
+        for alias, normalized in DISEASE_ALIASES.items():
+            add(alias, ENTITY_DISEASE, normalized, 0.90)
         for test in TEST_TERMS:
             add(test, ENTITY_TEST, test, 0.78)
         for risk in RISK_FACTOR_TERMS:
@@ -298,7 +310,7 @@ class MedicalEntityExtractor:
                     end=match.end(),
                 ))
 
-        result = sorted(entities, key=lambda entity: (entity.start is None, entity.start or 0, -len(entity.text)))
+        result = _drop_nested_same_label_entities(entities)
         if len(self._extract_cache) > 512:
             self._extract_cache.clear()
         self._extract_cache[cache_key] = result
@@ -337,3 +349,31 @@ class MedicalEntityExtractor:
 
 def entities_to_dicts(entities: list[MedicalEntity]) -> list[dict[str, Any]]:
     return [entity.to_dict() for entity in entities]
+
+
+def _drop_nested_same_label_entities(entities: list[MedicalEntity]) -> list[MedicalEntity]:
+    ordered = sorted(
+        entities,
+        key=lambda entity: (
+            entity.start is None,
+            entity.start or 0,
+            -(entity.end or 0) + (entity.start or 0),
+        ),
+    )
+    keep: list[MedicalEntity] = []
+    for entity in ordered:
+        if entity.start is None or entity.end is None:
+            keep.append(entity)
+            continue
+        nested = False
+        for existing in keep:
+            if existing.label != entity.label or existing.start is None or existing.end is None:
+                continue
+            existing_len = existing.end - existing.start
+            entity_len = entity.end - entity.start
+            if existing.start <= entity.start and existing.end >= entity.end and existing_len > entity_len:
+                nested = True
+                break
+        if not nested:
+            keep.append(entity)
+    return sorted(keep, key=lambda entity: (entity.start is None, entity.start or 0, -len(entity.text)))

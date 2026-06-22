@@ -15,22 +15,23 @@ from typing import Any
 try:
     from .corpus_schema import DEFAULT_CHUNKS_PATH, read_jsonl
     from .clinical_claims import SUPPORTED_THRESHOLD, WEAK_SUPPORT_THRESHOLD, classify_support_status
+    from .nli_verifier import NLI_CONTRADICTION_THRESHOLD, NLI_SUPPORT_THRESHOLD, get_nli_status
     from .radiology_analyzer import format_finding_assessment
     from .structured_log import log_event
 except ImportError:
     from corpus_schema import DEFAULT_CHUNKS_PATH, read_jsonl
     from clinical_claims import SUPPORTED_THRESHOLD, WEAK_SUPPORT_THRESHOLD, classify_support_status
+    from nli_verifier import NLI_CONTRADICTION_THRESHOLD, NLI_SUPPORT_THRESHOLD, get_nli_status
     from radiology_analyzer import format_finding_assessment
     from structured_log import log_event
 
 _corpus_condition_cache = None
-NLI_ENGINE = "local_lexical_verification"
+NLI_ENGINE = "deberta_v3_mnli_with_local_fallback"
 
 NLI_LABEL_CONTRADICTION = 0
 NLI_LABEL_ENTAILMENT = 1
 NLI_LABEL_NEUTRAL = 2
-NLI_CONTRADICTION_THRESHOLD = 0.75
-NLI_ENTAILMENT_THRESHOLD = 0.55
+NLI_ENTAILMENT_THRESHOLD = NLI_SUPPORT_THRESHOLD
 NLI_NEUTRAL_THRESHOLD = 0.45
 NLI_CONTRADICTION_MARGIN = 0.10
 MAX_NLI_CLAIMS = 8
@@ -569,6 +570,7 @@ def _run_nli_from_claim_verification(
             "best_premise": item.get("best_evidence"),
             "lexical_support": None,
             "source": "post_generation_claim_verification",
+            "nli": item.get("nli"),
         }
         for item in claim_results
     ]
@@ -587,6 +589,30 @@ def _run_nli_from_claim_verification(
     if support_ratio >= 0.80 and mean_support >= SUPPORTED_THRESHOLD and not weak and not weak_supported:
         return "Entailed", round(mean_support, 4), warnings, nli_claims
     return "Neutral", round(mean_support, 4), warnings, nli_claims
+
+
+def _aggregate_nli_metadata(nli_claims: list[dict[str, Any]]) -> dict[str, Any]:
+    enabled_claims = [
+        item.get("nli") or {}
+        for item in nli_claims
+        if (item.get("nli") or {}).get("enabled")
+    ]
+    status = get_nli_status()
+    if not enabled_claims:
+        return {
+            "enabled": False,
+            "model": status.get("model"),
+            "entailment": 0.0,
+            "contradiction": 0.0,
+            "neutral": 0.0,
+        }
+    return {
+        "enabled": True,
+        "model": enabled_claims[0].get("model") or status.get("model"),
+        "entailment": round(sum(float(item.get("entailment") or 0.0) for item in enabled_claims) / len(enabled_claims), 4),
+        "contradiction": round(max(float(item.get("contradiction") or 0.0) for item in enabled_claims), 4),
+        "neutral": round(sum(float(item.get("neutral") or 0.0) for item in enabled_claims) / len(enabled_claims), 4),
+    }
 
 
 def _run_imaging_verification(
@@ -843,6 +869,10 @@ def verify_response(
     rag_error = rag_verification["error"]
     if rag_error:
         all_warnings.append(f"RAG: {rag_error}")
+    all_warnings.extend(
+        rag_result.get("safety_precheck", {}).get("warnings", [])
+        if rag_result else []
+    )
 
     nli_start = perf_counter()
     reused_nli = _run_nli_from_claim_verification(safety_result)
@@ -856,6 +886,8 @@ def verify_response(
         nli_source = NLI_ENGINE
     nli_duration_ms = round((perf_counter() - nli_start) * 1000.0, 2)
     all_warnings.extend(nli_warnings)
+
+    all_warnings.extend((safety_result or {}).get("warnings", []))
 
     imaging_status, imaging_warnings = _run_imaging_verification(
         response, imaging_result, matched_conditions
@@ -903,6 +935,7 @@ def verify_response(
         warnings_count=len(all_warnings),
         citations_count=len(citations),
     )
+    nli_metadata = _aggregate_nli_metadata(nli_claims)
 
     return {
         "risk_tier": risk_tier,
@@ -911,6 +944,7 @@ def verify_response(
             "label": nli_label,
             "confidence": nli_confidence,
             "claims": nli_claims,
+            **nli_metadata,
         },
         "risk_score": risk_assessment["score"],
         "risk_reasons": risk_assessment["reasons"],
@@ -927,10 +961,12 @@ def verify_response(
 
 
 def get_verification_status() -> dict[str, Any]:
+    nli_status = get_nli_status()
     return {
-        "nli_available": False,
-        "nli_model_loaded": False,
-        "nli_load_error": None,
+        "nli_available": nli_status.get("available", False),
+        "nli_model_loaded": nli_status.get("model_loaded", False),
+        "nli_load_error": nli_status.get("load_error"),
+        "nli_model": nli_status.get("model"),
         "nli_engine": NLI_ENGINE,
         "nli_contradiction_threshold": NLI_CONTRADICTION_THRESHOLD,
         "condition_source": "medical_corpus",

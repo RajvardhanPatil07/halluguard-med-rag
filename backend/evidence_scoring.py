@@ -27,22 +27,59 @@ SOURCE_AUTHORITY = {
     "corpus": 0.80,
 }
 
+LOW_EVIDENCE_SECTIONS = {"aliases", "related_topics", "topic_groups"}
+LOW_EVIDENCE_PREFIXES = (
+    "related health topics:",
+    "health topic groups:",
+    "also called:",
+)
+
 
 def _normalized_disease_terms(entities: list[MedicalEntity]) -> set[str]:
     return {
-        entity.normalized
+        _condition_key(entity.normalized)
         for entity in entities
         if entity.label == "disease"
     }
 
 
+def _condition_key(text: Any) -> str:
+    normalized = re.sub(r"[^a-z0-9]+", " ", str(text or "").lower()).strip()
+    tokens = []
+    for token in normalized.split():
+        if len(token) > 4 and token.endswith("ies"):
+            token = token[:-3] + "y"
+        elif len(token) > 4 and token.endswith("s"):
+            token = token[:-1]
+        tokens.append(token)
+    return " ".join(tokens)
+
+
 def _condition_aligned(hit: dict[str, Any], disease_terms: set[str]) -> bool | None:
     if not disease_terms:
         return None
-    condition = str(hit.get("condition") or "").strip().lower()
+    condition = _condition_key(hit.get("condition"))
     if not condition:
         return None
-    return condition in disease_terms
+    haystack = _condition_key(" ".join([
+        str(hit.get("condition") or ""),
+        str(hit.get("text") or "")[:500],
+    ]))
+    condition_tokens = set(condition.split())
+    for term in disease_terms:
+        term_tokens = set(term.split())
+        if term == condition or term in condition or condition in term:
+            return True
+        if term_tokens and condition_tokens and len(term_tokens & condition_tokens) / len(term_tokens) >= 0.6:
+            return True
+        if term and term in haystack:
+            return True
+    return False
+
+
+def condition_aligned_with_diseases(hit: dict[str, Any], disease_terms: set[str]) -> bool | None:
+    return _condition_aligned(hit, {_condition_key(term) for term in disease_terms})
+
 
 
 STOPWORDS = {
@@ -244,6 +281,14 @@ class EvidenceScorer:
                 final_score *= 0.70 if semantic_relevance >= 0.55 else 0.55
             elif query_entities and entity_overlap < 0.5:
                 final_score *= 0.88 if semantic_relevance >= 0.55 else 0.75
+            section = str(hit.get("section") or "").lower()
+            text_lower = str(hit.get("text") or "").strip().lower()
+            metadata_only = section in LOW_EVIDENCE_SECTIONS and (
+                lexical_relevance < 0.60
+                or text_lower.startswith(LOW_EVIDENCE_PREFIXES)
+            )
+            if metadata_only:
+                final_score *= 0.25
             if not query_entities:
                 final_score *= 0.95
             final_score = round(max(0.0, min(final_score, 1.0)), 4)
@@ -264,6 +309,8 @@ class EvidenceScorer:
                 reasons.append("condition_aligned")
             elif condition_alignment is False:
                 reasons.append("condition_mismatch")
+            if metadata_only:
+                reasons.append("metadata_only_section")
 
             scores.append(EvidenceScore(
                 citation_id=citation_id,

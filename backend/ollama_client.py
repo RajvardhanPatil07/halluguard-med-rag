@@ -42,8 +42,6 @@ def generate_text(
         "stream": False,
         "options": {
             "num_predict": max_new_tokens,
-            "temperature": 0,
-            "top_p": 1,
         },
     }
     if images:

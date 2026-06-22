@@ -1,4 +1,5 @@
-import hashlib
+import os
+import re
 from time import perf_counter
 from typing import Any
 
@@ -16,11 +17,6 @@ try:
     from .report_routes import router as report_router
     from .runtime_checks import get_runtime_status
     from .safety_pipeline import get_safety_pipeline_status, run_post_generation_safety
-    from .safety_gate import (
-        enforce_answer_policy,
-        sanitize_hidden_candidate_safety,
-        sanitize_hidden_candidate_verification,
-    )
     from .structured_log import log_event
 except ImportError:
     from audit_log import write_audit_event
@@ -32,11 +28,6 @@ except ImportError:
     from report_routes import router as report_router
     from runtime_checks import get_runtime_status
     from safety_pipeline import get_safety_pipeline_status, run_post_generation_safety
-    from safety_gate import (
-        enforce_answer_policy,
-        sanitize_hidden_candidate_safety,
-        sanitize_hidden_candidate_verification,
-    )
     from structured_log import log_event
 
 
@@ -55,32 +46,143 @@ app.add_middleware(
 app.include_router(report_router)
 
 
+IMAGE_MEDGEMMA_MAX_NEW_TOKENS = int(os.getenv("IMAGE_MEDGEMMA_MAX_NEW_TOKENS", "256"))
+INTERNAL_CITATION_RE = re.compile(
+    r"\s*\[[A-Z0-9][A-Z0-9_-]{2,}(?:-[A-Z0-9_-]+)*\]",
+    re.IGNORECASE,
+)
+INTERNAL_CITATION_ID_RE = re.compile(
+    r"^[A-Z0-9][A-Z0-9_-]{2,}(?:-[A-Z0-9_-]+)*$",
+    re.IGNORECASE,
+)
+
+
+def _title_label(value: Any) -> str:
+    text = str(value or "").replace("_", " ").strip()
+    return re.sub(r"\s+", " ", text).title() if text else ""
+
+
+def _display_citation_label(item: dict[str, Any] | None) -> str:
+    item = item or {}
+    source = str(item.get("source") or "Retrieved evidence").strip()
+    condition = _title_label(item.get("condition") or item.get("section") or "Medical Evidence")
+    return f"{source} - {condition}" if condition else source
+
+
+def _strip_internal_citation_ids(text: Any) -> Any:
+    if not isinstance(text, str):
+        return text
+    return re.sub(INTERNAL_CITATION_RE, "", text).strip()
+
+
 def _build_image_augmented_query(query: str, imaging_result: dict[str, Any] | None) -> str:
-    if not imaging_result or imaging_result.get("status") != "Analyzed":
+    if not imaging_result:
+        return query
+
+    status = imaging_result.get("status")
+    if status == "Neutral":
+        normal_score = imaging_result.get("normal_score")
+        parts = [query]
+        if normal_score is not None:
+            parts.append(
+                f"Radiology screening: no high-confidence finding detected; normal-likelihood {normal_score}%."
+            )
+        else:
+            parts.append("Radiology screening: no high-confidence finding detected.")
+        parts.append(
+            "Not a confirmed normal diagnosis; clinician/radiologist review is required."
+        )
+        return " ".join(parts)
+
+    if status != "Analyzed":
         return query
 
     findings = imaging_result.get("findings") or []
     critical = imaging_result.get("critical") or []
     scores = imaging_result.get("percentage_scores") or {}
-    assessments = [
-        format_finding_assessment(name, float(score))
-        for name, score in sorted(scores.items(), key=lambda item: float(item[1]), reverse=True)
-    ]
     parts = [query]
-    if assessments:
-        parts.append(f"Radiology model assessment: {' '.join(assessments[:4])}")
+    top_scores = sorted(scores.items(), key=lambda item: float(item[1]), reverse=True)[:4]
+    if top_scores:
+        score_text = ", ".join(f"{name} {float(value):.1f}%" for name, value in top_scores)
+        parts.append(f"Radiology screening findings: {score_text}.")
     elif findings:
         parts.append(f"Detected radiology findings: {', '.join(findings)}.")
     if critical:
-        parts.append(f"Likely high-confidence radiology findings: {', '.join(critical)}.")
-    if scores:
-        top_scores = sorted(scores.items(), key=lambda item: float(item[1]), reverse=True)[:4]
-        score_text = ", ".join(f"{name} {value}%" for name, value in top_scores)
-        parts.append(f"Radiology model scores: {score_text}.")
+        parts.append(f"High-confidence finding: {', '.join(critical)}.")
     parts.append(
-        "Prioritize the uploaded image findings. Do not list unrelated X-ray diagnoses unless clearly stated as differential possibilities."
+        "Use these as screening signals, not confirmed diagnoses; mention radiologist review."
     )
     return " ".join(parts)
+
+
+def _image_bytes_for_generation(
+    image_bytes: bytes | None,
+    imaging_result: dict[str, Any] | None,
+) -> bytes | None:
+    if not image_bytes:
+        return None
+
+    mode = os.getenv("MEDGEMMA_RAW_IMAGE_MODE", "radiology_error").lower()
+    if mode == "always":
+        return image_bytes
+    if mode == "never":
+        return None
+
+    status = (imaging_result or {}).get("status")
+    if status in {"Analyzed", "Neutral"}:
+        return None
+    return image_bytes
+
+
+def _ensure_citation_section(answer: str, citations: list[dict[str, Any]]) -> tuple[str, bool]:
+    if not citations:
+        return answer, False
+    citation_ids = [str(item.get("id") or "").strip() for item in citations if item.get("id")]
+    if not citation_ids:
+        return answer, False
+    has_citation_section = bool(re.search(r"(?im)^\s*(?:\*\*)?citations?(?:\*\*)?\s*:?\s*$", answer))
+    if has_citation_section:
+        return answer, False
+    lines = ["", "", "Citations:"]
+    for item in citations[:3]:
+        lines.append(f"- {_display_citation_label(item)}.")
+    return answer.rstrip() + "\n".join(lines), True
+
+
+def _sanitize_user_facing_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    citation_labels: dict[str, str] = {}
+    analysis = payload.get("analysis") or {}
+    citations = analysis.get("citations") or payload.get("citations") or []
+    for citation in citations:
+        if isinstance(citation, dict) and citation.get("id"):
+            citation_labels[str(citation["id"])] = _display_citation_label(citation)
+
+    def label_for(raw_id: Any) -> str | None:
+        if raw_id is None:
+            return None
+        raw_text = str(raw_id)
+        if raw_text == "IMG1":
+            return "Uploaded Image Analysis"
+        if INTERNAL_CITATION_ID_RE.match(raw_text):
+            return citation_labels.get(raw_text) or "Retrieved Evidence"
+        return citation_labels.get(raw_text) or _title_label(raw_text)
+
+    def scrub(value: Any) -> Any:
+        if isinstance(value, str):
+            return _strip_internal_citation_ids(value)
+        if isinstance(value, list):
+            return [scrub(item) for item in value]
+        if isinstance(value, dict):
+            cleaned: dict[str, Any] = {}
+            for key, item in value.items():
+                if key in {"id", "citation_id", "best_citation_id", "citation_a", "citation_b"}:
+                    cleaned[key] = label_for(item)
+                else:
+                    cleaned[key] = scrub(item)
+            return cleaned
+        return value
+
+    return scrub(payload)
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -155,7 +257,7 @@ async def chat(
         image — optional chest X-ray image
 
     Response format:
-        final_response  — policy-controlled answer visible to the user
+        final_response  — MedGemma's answer (never modified)
         analysis:
             risk_tier       — Tier 1 / Tier 2 / Tier 3
             kg              — Match / Neutral
@@ -178,10 +280,34 @@ async def chat(
 
     # ── Read image ──
     chat_start = perf_counter()
+    chat_timing_ms: dict[str, float] = {}
+    image_read_start = perf_counter()
     image_bytes = await image.read() if image else None
+    chat_timing_ms["image_upload_read"] = round((perf_counter() - image_read_start) * 1000.0, 2)
     image_uploaded = image_bytes is not None and len(image_bytes) > 0
+    image_analysis_start = perf_counter()
     imaging_result = analyze_image(image_bytes) if image_uploaded else None
+    chat_timing_ms["image_analysis"] = round((perf_counter() - image_analysis_start) * 1000.0, 2)
+    query_build_start = perf_counter()
     retrieval_query = _build_image_augmented_query(query, imaging_result)
+    chat_timing_ms["retrieval_query_build"] = round((perf_counter() - query_build_start) * 1000.0, 2)
+    log_event(
+        "runtime",
+        "stage_timing",
+        stage_name="image_upload_and_analysis",
+        duration_ms=round(
+            chat_timing_ms["image_upload_read"]
+            + chat_timing_ms["image_analysis"]
+            + chat_timing_ms["retrieval_query_build"],
+            2,
+        ),
+        image_uploaded=image_uploaded,
+        image_bytes=len(image_bytes or b""),
+        image_upload_read_ms=chat_timing_ms["image_upload_read"],
+        image_analysis_ms=chat_timing_ms["image_analysis"],
+        retrieval_query_build_ms=chat_timing_ms["retrieval_query_build"],
+        imaging_timing_ms=(imaging_result or {}).get("timing_ms"),
+    )
 
     # Retrieve evidence before generation. Never generate without grounded context.
     retrieval_start = perf_counter()
@@ -220,6 +346,7 @@ async def chat(
         )
 
     retrieval_duration_ms = round((perf_counter() - retrieval_start) * 1000.0, 2)
+    chat_timing_ms["retrieval_and_pre_generation_safety"] = retrieval_duration_ms
     log_event(
         "runtime",
         "stage_timing",
@@ -231,7 +358,31 @@ async def chat(
     # Generate MedGemma response. Never continue with synthetic text.
     generation_start = perf_counter()
     try:
-        ai_response = generate_response(rag_result["grounded_query"], image_bytes)
+        generation_image_bytes = _image_bytes_for_generation(image_bytes, imaging_result)
+        log_event(
+            "runtime",
+            "medgemma_image_forwarding",
+            image_uploaded=image_uploaded,
+            image_forwarded=generation_image_bytes is not None,
+            imaging_status=(imaging_result or {}).get("status"),
+            mode=os.getenv("MEDGEMMA_RAW_IMAGE_MODE", "radiology_error"),
+        )
+        generation_token_limit = IMAGE_MEDGEMMA_MAX_NEW_TOKENS if image_uploaded else None
+        ai_response = generate_response(
+            rag_result["grounded_query"],
+            generation_image_bytes,
+            max_new_tokens=generation_token_limit,
+        )
+        ai_response, citations_appended = _ensure_citation_section(
+            ai_response,
+            rag_result.get("citations", []),
+        )
+        if citations_appended:
+            log_event(
+                "runtime",
+                "citation_section_appended",
+                citations_count=len(rag_result.get("citations", [])),
+            )
     except MedGemmaError as exc:
         model_status_data = get_model_status()
         log_event(
@@ -268,6 +419,7 @@ async def chat(
     # ── Radiology analysis ──
     # ── Clinical claim safety layer ──
     generation_duration_ms = round((perf_counter() - generation_start) * 1000.0, 2)
+    chat_timing_ms["response_generation"] = generation_duration_ms
     log_event(
         "runtime",
         "stage_timing",
@@ -286,6 +438,7 @@ async def chat(
         imaging_result=imaging_result,
     )
     post_duration_ms = round((perf_counter() - post_start) * 1000.0, 2)
+    chat_timing_ms["claim_extraction_and_verification"] = post_duration_ms
     log_event(
         "runtime",
         "stage_timing",
@@ -304,6 +457,7 @@ async def chat(
         safety_result=post_generation_safety,
     )
     verification_duration_ms = round((perf_counter() - verification_start) * 1000.0, 2)
+    chat_timing_ms["risk_scoring"] = verification_duration_ms
     log_event(
         "runtime",
         "stage_timing",
@@ -312,31 +466,6 @@ async def chat(
         risk_score=verification["risk_score"],
         risk_tier=verification["risk_tier"],
     )
-    verification["warnings"].extend(
-        rag_result.get("safety_precheck", {}).get("warnings", [])
-    )
-    verification["warnings"].extend(post_generation_safety.get("warnings", []))
-
-    answer_gate = enforce_answer_policy(
-        query=query,
-        candidate_answer=ai_response,
-        verification=verification,
-        rag_result=rag_result,
-        safety_result=post_generation_safety,
-        imaging_result=imaging_result,
-    )
-    final_response = answer_gate["final_response"]
-    answer_policy = answer_gate["answer_policy"]
-    public_safety_result = sanitize_hidden_candidate_safety(
-        post_generation_safety,
-        answer_policy,
-    )
-    public_verification = sanitize_hidden_candidate_verification(
-        verification,
-        answer_policy,
-    )
-    candidate_response_hash = hashlib.sha256(ai_response.encode("utf-8")).hexdigest()
-
     # ── Build imaging section for response ──
     if imaging_result is None:
         imaging_data = {
@@ -354,25 +483,25 @@ async def chat(
             "critical": imaging_result.get("critical"),
             "normal_score": imaging_result.get("normal_score"),
             "percentage_scores": imaging_result.get("percentage_scores"),
+            "timing_ms": imaging_result.get("timing_ms"),
             "warnings": imaging_result.get("warnings", []),
         }
 
     # ── Build full response ──
     result = {
-        "final_response": final_response,
+        "final_response": ai_response,
         "analysis": {
-            "risk_tier": public_verification["risk_tier"],
-            "risk_score": public_verification["risk_score"],
-            "risk_reasons": public_verification["risk_reasons"],
-            "final_assessment": public_verification.get("final_assessment"),
-            "kg": public_verification["kg"],
-            "nli": public_verification["nli"],
-            "rag_score": public_verification["rag_score"],
-            "rag_verified": public_verification["rag_verified"],
-            "rag_error": public_verification["rag_error"],
+            "risk_tier": verification["risk_tier"],
+            "risk_score": verification["risk_score"],
+            "risk_reasons": verification["risk_reasons"],
+            "final_assessment": verification.get("final_assessment"),
+            "kg": verification["kg"],
+            "nli": verification["nli"],
+            "rag_score": verification["rag_score"],
+            "rag_verified": verification["rag_verified"],
+            "rag_error": verification["rag_error"],
             "retrieval_summary": rag_result.get("retrieval_summary", {}),
-            "citations": public_verification["citations"],
-            "answer_policy": answer_policy,
+            "citations": verification["citations"],
             "imaging": imaging_data,
             "safety": {
                 "pre_generation": {
@@ -380,26 +509,21 @@ async def chat(
                     "evidence_scores": rag_result.get("safety_precheck", {}).get("evidence_scores", []),
                     "source_conflicts": rag_result.get("safety_precheck", {}).get("source_conflicts", []),
                 },
-                "post_generation": public_safety_result,
+                "post_generation": post_generation_safety,
             },
-            "confidence": public_safety_result.get("confidence"),
-            "claims_summary": public_safety_result.get("claims_summary", {}),
-            "claim_verification": public_safety_result.get("claim_verification", []),
+            "confidence": post_generation_safety.get("confidence"),
+            "claims_summary": post_generation_safety.get("claims_summary", {}),
+            "claim_verification": post_generation_safety.get("claim_verification", []),
         },
-        "warnings": public_verification["warnings"],
-        "suggestions": public_verification["suggestions"],
-        "matched_conditions": public_verification["matched_conditions"],
-        "citations": public_verification["citations"],
+        "warnings": verification["warnings"],
+        "suggestions": verification["suggestions"],
+        "matched_conditions": verification["matched_conditions"],
+        "citations": verification["citations"],
         "image_uploaded": image_uploaded,
         "meta": {
-            "response_chars": len(final_response),
-            "candidate_response_chars": len(ai_response),
-            "candidate_response_sha256": candidate_response_hash,
+            "response_chars": len(ai_response),
             "timing_ms": {
-                "retrieval_and_pre_generation_safety": retrieval_duration_ms,
-                "response_generation": generation_duration_ms,
-                "claim_extraction_and_verification": post_duration_ms,
-                "risk_scoring": verification_duration_ms,
+                **chat_timing_ms,
                 "total": round((perf_counter() - chat_start) * 1000.0, 2),
             },
         },
@@ -413,13 +537,8 @@ async def chat(
         "risk_tier": verification["risk_tier"],
         "risk_score": verification["risk_score"],
         "risk_reasons": verification["risk_reasons"],
-        "answer_policy": answer_policy,
         "safety_confidence": post_generation_safety.get("confidence"),
-        "claims_summary": post_generation_safety.get("claims_summary", {}),
-        "claim_status_counts": answer_policy.get("claim_status_counts", {}),
-        "candidate_response_chars": len(ai_response),
-        "candidate_response_sha256": candidate_response_hash,
-        "final_response_chars": len(final_response),
+        "claim_verification": post_generation_safety.get("claim_verification", []),
         "source_conflicts": rag_result.get("safety_precheck", {}).get("source_conflicts", []),
         "rag_score": verification["rag_score"],
         "rag_verified": verification["rag_verified"],
@@ -436,16 +555,14 @@ async def chat(
         duration_ms=round((perf_counter() - chat_start) * 1000.0, 2),
         query_chars=len(query),
         image_uploaded=image_uploaded,
-        response_chars=len(final_response),
-        candidate_response_chars=len(ai_response),
-        answer_policy_decision=answer_policy.get("decision"),
+        response_chars=len(ai_response),
         risk_tier=verification["risk_tier"],
         rag_score=verification["rag_score"],
         nli_label=verification["nli"]["label"],
         imaging_status=imaging_data["status"],
     )
 
-    return result
+    return _sanitize_user_facing_payload(result)
 
 
 if __name__ == "__main__":

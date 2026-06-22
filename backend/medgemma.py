@@ -10,6 +10,7 @@ Important safety rule:
 
 import re
 from datetime import datetime, timezone
+from io import BytesIO
 from time import perf_counter
 
 try:
@@ -48,6 +49,8 @@ _model_status = "unavailable"
 _last_load_attempt = None
 _last_load_error = None
 _last_generation_info = None
+
+GENERATION_IMAGE_MAX_SIDE = 1024
 
 
 class MedGemmaError(RuntimeError):
@@ -178,54 +181,112 @@ def is_model_available() -> bool:
 
 def _build_prompt(query: str) -> str:
     return f"""
-You are MedGemma, an expert medical AI assistant producing a candidate answer
-for an evidence verifier.
+You are MedGemma, an expert medical AI assistant.
 
 Instructions:
-- Use only the retrieved evidence included in the question/context.
-- If the retrieved evidence is insufficient, say that it is insufficient.
-- Keep the answer compact: at most 4 to 6 clinical bullets total.
-- Every clinical claim must include a citation ID from the retrieved evidence, such as [E1].
-- Do not add causes, doses, diagnoses, imaging findings, or treatment recommendations unless directly supported by retrieved evidence.
-- Do not include unsupported background knowledge from memory.
+- Provide comprehensive and detailed medical explanations.
+- Use clear section headings.
+- Use bullet points when appropriate.
+- Explain symptoms, causes, risk factors, diagnosis, treatment options, prevention, and prognosis whenever relevant.
+- Expand each section with sufficient detail.
+- Do not provide one-paragraph answers.
+- Do not give extremely short summaries.
 - If information is uncertain, clearly state the uncertainty.
 - Do not provide a final diagnosis.
 - Do not provide a treatment prescription.
 - Answer directly without showing internal reasoning.
-- Do not include a citations appendix; cite inline only.
 
 Question:
 {query}
 """
 
 
-def _encode_image(image_bytes: bytes | None) -> list[str] | None:
+def _prepare_image_for_generation(image_bytes: bytes | None) -> tuple[bytes | None, dict]:
+    timings: dict[str, float | int | bool | str] = {
+        "input_bytes": len(image_bytes or b""),
+        "resized": False,
+    }
     if not image_bytes:
-        return None
+        return None, timings
+
+    start = perf_counter()
+    try:
+        from PIL import Image
+
+        with Image.open(BytesIO(image_bytes)) as image:
+            timings["input_width"], timings["input_height"] = image.size
+            max_side = max(image.size)
+            if max_side <= GENERATION_IMAGE_MAX_SIDE:
+                timings["output_bytes"] = len(image_bytes)
+                timings["prepare_ms"] = round((perf_counter() - start) * 1000.0, 2)
+                return image_bytes, timings
+
+            image = image.convert("RGB")
+            image.thumbnail((GENERATION_IMAGE_MAX_SIDE, GENERATION_IMAGE_MAX_SIDE))
+            output = BytesIO()
+            image.save(output, format="JPEG", quality=92, optimize=True)
+            prepared = output.getvalue()
+            timings.update({
+                "resized": True,
+                "output_width": image.size[0],
+                "output_height": image.size[1],
+                "output_bytes": len(prepared),
+            })
+            timings["prepare_ms"] = round((perf_counter() - start) * 1000.0, 2)
+            return prepared, timings
+    except Exception as exc:
+        timings["fallback_reason"] = str(exc)
+        timings["output_bytes"] = len(image_bytes)
+        timings["prepare_ms"] = round((perf_counter() - start) * 1000.0, 2)
+        return image_bytes, timings
+
+
+def _encode_image(image_bytes: bytes | None) -> tuple[list[str] | None, dict]:
+    prepared, timings = _prepare_image_for_generation(image_bytes)
+    encode_start = perf_counter()
+    if not prepared:
+        timings["base64_encode_ms"] = 0.0
+        return None, timings
+    if not image_bytes:
+        timings["base64_encode_ms"] = 0.0
+        return None, timings
     import base64
 
-    return [base64.b64encode(image_bytes).decode("ascii")]
+    encoded = base64.b64encode(prepared).decode("ascii")
+    timings["base64_chars"] = len(encoded)
+    timings["base64_encode_ms"] = round((perf_counter() - encode_start) * 1000.0, 2)
+    return [encoded], timings
 
 
-def generate_response(query: str, image_bytes: bytes | None = None) -> str:
+def generate_response(
+    query: str,
+    image_bytes: bytes | None = None,
+    max_new_tokens: int | None = None,
+) -> str:
     """
     Generates a medical response from local Ollama MedGemma.
     Raises if Ollama cannot serve the model or generation fails.
     """
     global _model_status, _last_generation_info
 
+    token_limit = max_new_tokens if max_new_tokens is not None else MAX_NEW_TOKENS
     prompt = _build_prompt(query)
     start = perf_counter()
+    encode_start = perf_counter()
+    images, image_timing = _encode_image(image_bytes)
+    image_timing["total_image_encode_ms"] = round((perf_counter() - encode_start) * 1000.0, 2)
 
     try:
+        ollama_start = perf_counter()
         data = generate_text(
             prompt=prompt,
-            images=_encode_image(image_bytes),
+            images=images,
             model=OLLAMA_MODEL,
             host=OLLAMA_HOST,
             timeout=OLLAMA_TIMEOUT_SECONDS,
-            max_new_tokens=MAX_NEW_TOKENS,
+            max_new_tokens=token_limit,
         )
+        ollama_request_ms = round((perf_counter() - ollama_start) * 1000.0, 2)
     except OllamaUnavailableError as exc:
         _model_status = "failed"
         _last_generation_info = None
@@ -238,6 +299,7 @@ def generate_response(query: str, image_bytes: bytes | None = None) -> str:
             host=OLLAMA_HOST,
             model=OLLAMA_MODEL,
             error=str(exc),
+            image_timing_ms=image_timing,
         )
         raise MedGemmaUnavailableError(
             f"MedGemma is not available: {exc}"
@@ -252,6 +314,7 @@ def generate_response(query: str, image_bytes: bytes | None = None) -> str:
             host=OLLAMA_HOST,
             model=OLLAMA_MODEL,
             error=str(exc),
+            image_timing_ms=image_timing,
         )
         raise MedGemmaGenerationError(
             f"MedGemma generation failed: {exc}"
@@ -265,7 +328,7 @@ def generate_response(query: str, image_bytes: bytes | None = None) -> str:
     raw_text = str(data.get("response") or "").strip()
     clean_text = _clean_response(raw_text)
     _last_generation_info = {
-        "max_new_tokens": MAX_NEW_TOKENS,
+        "max_new_tokens": token_limit,
         "token_count": data.get("eval_count"),
         "reached_eos": bool(data.get("done")),
         "raw_chars": len(raw_text),
@@ -274,6 +337,8 @@ def generate_response(query: str, image_bytes: bytes | None = None) -> str:
         "total_duration": data.get("total_duration"),
         "load_duration": data.get("load_duration"),
         "eval_duration": data.get("eval_duration"),
+        "ollama_request_ms": ollama_request_ms,
+        "image_timing_ms": image_timing,
     }
     log_event(
         "generation",
@@ -286,6 +351,8 @@ def generate_response(query: str, image_bytes: bytes | None = None) -> str:
         reached_eos=bool(data.get("done")),
         host=OLLAMA_HOST,
         model=OLLAMA_MODEL,
+        ollama_request_ms=ollama_request_ms,
+        image_timing_ms=image_timing,
     )
     return clean_text
 
