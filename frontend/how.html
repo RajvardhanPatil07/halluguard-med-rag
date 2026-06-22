@@ -6,131 +6,269 @@
   <title>How It Works - HalluGuard-Med</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
 
-<nav class="navbar">
-  <div class="container navbar__inner">
-    <a href="index.html" class="navbar__brand">
-      <div class="navbar__brand-icon">
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.955 11.955 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"/>
-        </svg>
+  <!-- NAVBAR -->
+  <nav class="navbar">
+    <div class="container navbar__inner">
+      <a href="index.html" class="brand">
+        <span class="brand__mark">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.955 11.955 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"/></svg>
+        </span>
+        <span>HalluGuard<span class="brand__accent">-Med</span></span>
+      </a>
+      <div class="navbar__links">
+        <a href="index.html" class="navbar__link">Home</a>
+        <a href="assistant.html" class="navbar__link">Assistant</a>
+        <a href="how.html" class="navbar__link active">How It Works</a>
+        <a href="assistant.html" class="navbar__cta">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 010 1.972l-11.54 6.347a1.125 1.125 0 01-1.667-.986V5.653z"/></svg>
+          Launch Assistant
+        </a>
       </div>
-      HalluGuard<span class="accent">-Med</span>
-    </a>
-    <div class="navbar__links">
+      <button class="navbar__hamburger" id="hamburger" aria-label="Open menu">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+    <div class="navbar__mobile" id="mobile-menu">
       <a href="index.html" class="navbar__link">Home</a>
       <a href="assistant.html" class="navbar__link">Assistant</a>
       <a href="how.html" class="navbar__link active">How It Works</a>
       <a href="assistant.html" class="navbar__cta">Launch Assistant</a>
     </div>
-    <button class="navbar__hamburger" id="hamburger" aria-label="Menu">
-      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"/>
-      </svg>
-    </button>
-  </div>
-  <div class="navbar__mobile" id="mobile-menu">
-    <a href="index.html" class="navbar__link">Home</a>
-    <a href="assistant.html" class="navbar__link">Assistant</a>
-    <a href="how.html" class="navbar__link active">How It Works</a>
-    <a href="assistant.html" class="navbar__cta">Launch Assistant</a>
-  </div>
-</nav>
+  </nav>
 
-<main>
-  <section class="how-hero">
-    <div class="container">
-      <div class="how-hero__inner">
-        <div class="how-hero__badge">
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375"/>
-          </svg>
-          Current Architecture
+  <main>
+    <section class="page-hero page-hero--how">
+      <div class="hero__bg-mesh"></div>
+      <div class="hero__bg-circles">
+        <div class="circle circle--1"></div>
+        <div class="circle circle--2"></div>
+      </div>
+      <div class="container">
+        <div class="eyebrow"><span class="eyebrow__dot"></span>Implemented backend architecture</div>
+        <h1>From query to <span class="gradient-text">verified medical response.</span></h1>
+        <p>Every answer passes through retrieval, grounded generation, claim verification, confidence scoring, risk analysis, and report formatting.</p>
+        <div class="page-hero__chips">
+          <span class="badge badge--blue">FastAPI backend</span>
+          <span class="badge badge--safe">MedGemma</span>
+          <span class="badge badge--purple">DeBERTa-v3</span>
+          <span class="badge badge--warn">TorchXRayVision</span>
         </div>
-        <h1>How HalluGuard-Med Works</h1>
-        <p>Each assistant response moves through generation, retrieval, verification, hallucination checks, and final safety reporting.</p>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container">
+        <div class="flow-grid">
+
+          <article class="flow-step" data-animate="fade-up" data-delay="0">
+            <div class="flow-step__phase phase--input">Input</div>
+            <span class="flow-step__index">01</span>
+            <div class="flow-step__icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16M4 12h10M4 19h7"/></svg>
+            </div>
+            <h3>User input</h3>
+            <p>Text query and optional chest X-ray enter the FastAPI backend.</p>
+            <div class="flow-step__tech">FastAPI · FormData</div>
+          </article>
+
+          <article class="flow-step" data-animate="fade-up" data-delay="60">
+            <div class="flow-step__phase phase--input">Vision</div>
+            <span class="flow-step__index">02</span>
+            <div class="flow-step__icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4h12v16H6zM9 8h6M9 12h6M9 16h4"/></svg>
+            </div>
+            <h3>Image screening</h3>
+            <p>TorchXRayVision produces finding probabilities when an image is supplied.</p>
+            <div class="flow-step__tech">TorchXRayVision</div>
+          </article>
+
+          <article class="flow-step" data-animate="fade-up" data-delay="120">
+            <div class="flow-step__phase phase--retrieval">Retrieval</div>
+            <span class="flow-step__index">03</span>
+            <div class="flow-step__icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7c0-2 4-3 8-3s8 1 8 3-4 3-8 3-8-1-8-3zm0 0v5c0 2 4 3 8 3s8-1 8-3V7m-16 5v5c0 2 4 3 8 3s8-1 8-3v-5"/></svg>
+            </div>
+            <h3>Hybrid retrieval</h3>
+            <p>BM25 and Qdrant dense search retrieve medical evidence chunks.</p>
+            <div class="flow-step__tech">BM25 · Qdrant</div>
+          </article>
+
+          <article class="flow-step" data-animate="fade-up" data-delay="180">
+            <div class="flow-step__phase phase--retrieval">Scoring</div>
+            <span class="flow-step__index">04</span>
+            <div class="flow-step__icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7M4 20h16"/></svg>
+            </div>
+            <h3>Evidence scoring</h3>
+            <p>Relevance, source quality, entity alignment, and conflicts filter citations.</p>
+            <div class="flow-step__tech">Quality · Relevance</div>
+          </article>
+
+          <article class="flow-step flow-step--highlight" data-animate="fade-up" data-delay="240">
+            <div class="flow-step__phase phase--generation">Generation</div>
+            <span class="flow-step__index">05</span>
+            <div class="flow-step__icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4v6c0 5-3.5 7.5-8 8-4.5-.5-8-3-8-8V7l8-4zM8 12h8M8 16h5"/></svg>
+            </div>
+            <h3>Grounded generation</h3>
+            <p>MedGemma receives only retrieved evidence and safety instructions.</p>
+            <div class="flow-step__tech">MedGemma · RAG prompt</div>
+          </article>
+
+          <article class="flow-step" data-animate="fade-up" data-delay="300">
+            <div class="flow-step__phase phase--verification">Claims</div>
+            <span class="flow-step__index">06</span>
+            <div class="flow-step__icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4h10v16H7zM10 8h4M10 12h4M10 16h3"/></svg>
+            </div>
+            <h3>Claim extraction</h3>
+            <p>The answer is split into clinical claims for individual verification.</p>
+            <div class="flow-step__tech">NLP · Segmentation</div>
+          </article>
+
+          <article class="flow-step" data-animate="fade-up" data-delay="360">
+            <div class="flow-step__phase phase--verification">NLI</div>
+            <span class="flow-step__index">07</span>
+            <div class="flow-step__icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12l2 2 4-5M12 3a9 9 0 100 18 9 9 0 000-18z"/></svg>
+            </div>
+            <h3>DeBERTa verification</h3>
+            <p>Each claim is checked against evidence using NLI entailment and contradiction.</p>
+            <div class="flow-step__tech">DeBERTa-v3 · MNLI</div>
+          </article>
+
+          <article class="flow-step" data-animate="fade-up" data-delay="420">
+            <div class="flow-step__phase phase--risk">Risk</div>
+            <span class="flow-step__index">08</span>
+            <div class="flow-step__icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4l8 15H4L12 4zm0 5v5m0 3h.01"/></svg>
+            </div>
+            <h3>Risk and confidence</h3>
+            <p>Unsupported claims, weak evidence, conflicts, and warnings shape final risk tier.</p>
+            <div class="flow-step__tech">Confidence fusion · Tier 1-3</div>
+          </article>
+
+          <article class="flow-step flow-step--final flow-step--output" data-animate="fade-up" data-delay="480">
+            <div class="flow-step__phase phase--output">Output</div>
+            <span class="flow-step__index">09</span>
+            <div class="flow-step__icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l3 3v15H6zM14 3v4h4M9 12h6M9 16h6"/></svg>
+            </div>
+            <h3>Professional output</h3>
+            <p>The UI and PDF show readable evidence labels, percentages, warnings, and recommendations.</p>
+            <div class="flow-step__tech">HTML · PDF report</div>
+          </article>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- Architecture diagram -->
+    <section class="section section--tight">
+      <div class="container">
+        <div class="arch-diagram" data-animate="fade-up">
+          <div class="arch-diagram__header">
+            <div class="eyebrow"><span class="eyebrow__dot"></span>Architecture overview</div>
+            <h2>Three-layer verification design.</h2>
+          </div>
+          <div class="arch-layers">
+            <div class="arch-layer arch-layer--input">
+              <div class="arch-layer__label">Input Layer</div>
+              <div class="arch-layer__items">
+                <span>Text query</span>
+                <span>Chest X-ray</span>
+              </div>
+            </div>
+            <div class="arch-arrow-down">↓</div>
+            <div class="arch-layer arch-layer--processing">
+              <div class="arch-layer__label">Processing Layer</div>
+              <div class="arch-layer__items">
+                <span>BM25 retrieval</span>
+                <span>Qdrant dense</span>
+                <span>MedGemma</span>
+                <span>TorchXRayVision</span>
+              </div>
+            </div>
+            <div class="arch-arrow-down">↓</div>
+            <div class="arch-layer arch-layer--verification">
+              <div class="arch-layer__label">Verification Layer</div>
+              <div class="arch-layer__items">
+                <span>DeBERTa-v3 NLI</span>
+                <span>Confidence fusion</span>
+                <span>Risk scoring</span>
+                <span>PDF report</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section--tight">
+      <div class="container">
+        <div class="workflow-band" data-animate="fade-up">
+          <div class="workflow-band__illustration">
+            <svg viewBox="0 0 120 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="60" cy="40" r="32" fill="url(#g2)" opacity="0.12"/>
+              <path d="M40 40 L50 30 L60 44 L70 26 L80 40" stroke="#2563eb" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+              <circle cx="80" cy="40" r="6" fill="#0f9f6e"/>
+              <circle cx="40" cy="40" r="5" fill="#2563eb" opacity="0.4"/>
+              <path d="M54 52 L66 52" stroke="#0f9f6e" stroke-width="2" stroke-linecap="round"/>
+              <defs>
+                <linearGradient id="g2" x1="28" y1="8" x2="92" y2="72" gradientUnits="userSpaceOnUse">
+                  <stop stop-color="#2563eb"/>
+                  <stop offset="1" stop-color="#0f9f6e"/>
+                </linearGradient>
+              </defs>
+            </svg>
+          </div>
+          <div>
+            <div class="eyebrow"><span class="eyebrow__dot"></span>Safety posture</div>
+            <h2>Designed for review, not automatic diagnosis.</h2>
+            <p>Radiology findings are shown as screening signals and all generated medical claims remain subject to evidence checks.</p>
+          </div>
+          <div class="workflow-band__actions">
+            <a class="btn btn--primary btn--glow" href="assistant.html">Open Assistant</a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="container footer__inner">
+      <div class="footer__brand">
+        <span class="brand__mark brand__mark--sm">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.955 11.955 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"/></svg>
+        </span>
+        <strong>HalluGuard-Med</strong>
+      </div>
+      <span>Evidence, verification, confidence, risk, and reports</span>
+      <div class="footer__links">
+        <a href="index.html">Home</a>
+        <a href="assistant.html">Assistant</a>
+        <a href="how.html">How It Works</a>
       </div>
     </div>
-  </section>
-
-  <section class="pipeline architecture-pipeline">
-    <div class="container">
-      <div class="architecture-flow">
-        <article class="architecture-step">
-          <div class="architecture-step__number">01</div>
-          <h3>User Query/Image Upload</h3>
-          <p>The user submits a medical question and may attach an image for visual context.</p>
-        </article>
-        <article class="architecture-step">
-          <div class="architecture-step__number">02</div>
-          <h3>MedGemma Analysis</h3>
-          <p>MedGemma produces the initial medical answer from the submitted input.</p>
-        </article>
-        <article class="architecture-step">
-          <div class="architecture-step__number">03</div>
-          <h3>Medical Knowledge Retrieval</h3>
-          <p>Qdrant Cloud RAG retrieves relevant medical evidence for verification.</p>
-        </article>
-        <article class="architecture-step">
-          <div class="architecture-step__number">04</div>
-          <h3>Evidence Verification</h3>
-          <p>Claims are checked against retrieved sources, citations, and support scores.</p>
-        </article>
-        <article class="architecture-step">
-          <div class="architecture-step__number">05</div>
-          <h3>Hallucination Detection</h3>
-          <p>Unsupported claims, contradictions, and source conflicts are flagged.</p>
-        </article>
-        <article class="architecture-step">
-          <div class="architecture-step__number">06</div>
-          <h3>Confidence &amp; Risk Scoring</h3>
-          <p>The safety layer assigns confidence, risk level, and review guidance.</p>
-        </article>
-        <article class="architecture-step architecture-step--final">
-          <div class="architecture-step__number">07</div>
-          <h3>Final Safe Medical Report</h3>
-          <p>The interface presents the answer with findings, evidence, risks, and recommendations.</p>
-        </article>
-      </div>
+    <div class="footer__bottom">
+      <div class="container">Clinical decision support only. Does not replace a licensed clinician.</div>
     </div>
-  </section>
+  </footer>
 
-  <section class="cta-band">
-    <div class="container">
-      <div class="cta-band__inner">
-        <h2>Review a medical response</h2>
-        <p>Open the assistant to see generation, evidence, confidence, and risk reporting in one place.</p>
-        <a href="assistant.html" class="btn-white">
-          Open the Assistant
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"/>
-          </svg>
-        </a>
-      </div>
-    </div>
-  </section>
-</main>
-
-<footer class="footer">
-  <div class="container footer__inner">
-    <div class="footer__brand">
-      <svg class="footer__brand-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" width="16" height="16">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.955 11.955 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"/>
-      </svg>
-      <strong>HalluGuard-Med</strong> - AI Medical Verification System
-    </div>
-    <nav class="footer__links">
-      <a href="index.html">Home</a>
-      <a href="assistant.html">Assistant</a>
-      <a href="how.html">How It Works</a>
-    </nav>
-  </div>
-</footer>
-
-<script src="js/script.js"></script>
+  <script src="js/script.js"></script>
+  <script>
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); observer.unobserve(e.target); } });
+    }, { threshold: 0.1 });
+    document.querySelectorAll('[data-animate]').forEach(el => {
+      el.style.transitionDelay = (el.dataset.delay || 0) + 'ms';
+      observer.observe(el);
+    });
+  </script>
 </body>
 </html>

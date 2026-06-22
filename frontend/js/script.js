@@ -21,20 +21,18 @@ const SVG = {
 };
 
 const DEFAULT_BACKEND_URL = "http://127.0.0.1:8000";
-const BACKEND_URL_STORAGE_KEY = "halluguard_backend_url";
-
-function normalizeBackendUrl(url) {
-  return String(url || "").trim().replace(/\/+$/, "");
-}
 
 function getBackendBaseUrl() {
-  const savedUrl = normalizeBackendUrl(localStorage.getItem(BACKEND_URL_STORAGE_KEY));
-  return savedUrl || DEFAULT_BACKEND_URL;
+  return DEFAULT_BACKEND_URL;
 }
 
-function getBackendModeLabel() {
-  const savedUrl = normalizeBackendUrl(localStorage.getItem(BACKEND_URL_STORAGE_KEY));
-  return savedUrl ? "Using Kaggle backend" : "Using local backend";
+function formatPercent(value, digits = 1) {
+  if (value == null || Number.isNaN(Number(value))) return "n/a";
+  const numeric = Number(value);
+  const percent = numeric <= 1 ? numeric * 100 : numeric;
+  if (percent > 0 && percent < 0.1) return "<0.1%";
+  if (percent < 100 && percent > 99.9) return ">99.9%";
+  return `${percent.toFixed(digits)}%`;
 }
 
 async function getBackendResponse(query, imageDataUrl) {
@@ -211,7 +209,7 @@ function buildRadiologyPanel(imaging) {
 function buildCitationsPanel(citations) {
   if (!citations || !citations.length) return "";
   const rows = citations.map(citation => {
-    const score = citation.score != null ? `${(citation.score * 100).toFixed(0)}%` : "n/a";
+    const score = formatPercent(citation.score);
     return `
       <div class="citation-item">
         <div class="citation-item__meta">
@@ -287,7 +285,7 @@ function getConfidenceDecision(confidence) {
 function buildConfidencePanel(analysis) {
   const confidence = analysis.confidence || {};
   const label = confidence.label || "unknown";
-  const score = confidence.score != null ? `${Math.round(confidence.score * 100)}%` : "n/a";
+  const score = formatPercent(confidence.score);
   const decision = getConfidenceDecision(confidence);
   const reasons = confidence.reasons || [];
   const tags = reasons.length
@@ -331,7 +329,7 @@ function buildClaimVerificationPanel(claims) {
   const supported = claims.filter(item => item.status === "supported").length;
   const rows = claims.map(item => {
     const status = item.status || "insufficient";
-    const support = item.support_score != null ? `${Math.round(item.support_score * 100)}%` : "n/a";
+    const support = formatPercent(item.support_score);
     const citation = item.best_citation_id || "No citation";
     const evidence = item.best_evidence
       ? `<div class="claim-body__evidence"><strong>${escapeHtml(citation)}</strong>: ${escapeHtml(item.best_evidence)}</div>`
@@ -370,6 +368,7 @@ function buildEvidenceScoresPanel(scores) {
   const rows = scores.slice(0, 6).map(item => {
     const score = Number(item.final_score || 0);
     const pct = Math.max(0, Math.min(100, Math.round(score * 100)));
+    const displayPct = formatPercent(score);
     const color = scoreColor(score);
     return `
       <div class="evidence-quality__row">
@@ -377,7 +376,7 @@ function buildEvidenceScoresPanel(scores) {
         <div class="evidence-quality__track">
           <div class="evidence-quality__fill" style="width:${pct}%; background:${color}"></div>
         </div>
-        <div class="evidence-quality__score">${pct}%</div>
+        <div class="evidence-quality__score">${displayPct}</div>
         <div class="evidence-quality__badge ${item.passed ? "pass" : "fail"}">${item.passed ? "used" : "filtered"}</div>
       </div>`;
   }).join("");
@@ -435,7 +434,7 @@ function buildAnalysisPanel(data) {
   const nli = analysis.nli || {};
   const nliLabel = nli.label || "Neutral";
   const nliConfidence = nli.confidence != null
-    ? ` (${(nli.confidence * 100).toFixed(0)}%)`
+    ? ` (${formatPercent(nli.confidence)})`
     : "";
   const nliDisplay = nliLabel + nliConfidence;
 
@@ -443,7 +442,7 @@ function buildAnalysisPanel(data) {
   const ragScore = analysis.rag_score;
   const ragVerified = analysis.rag_verified;
   const ragDisplay = ragScore != null
-    ? `${(ragScore * 100).toFixed(0)}%`
+    ? formatPercent(ragScore)
     : "Failed";
   const ragCfg = ragScore == null
     ? { cls: "red", icon: SVG.xmark }
@@ -472,20 +471,29 @@ function buildAnalysisPanel(data) {
       </div>`;
   }).join("");
 
-  const warningsHtml = warnings.length ? `
-    <div>
-      <div class="panel-list__title danger">${SVG.warn} Warnings</div>
-      <div class="panel-list__items">
-        ${warnings.map(w => `<div class="panel-list__item danger">${escapeHtml(w)}</div>`).join("")}
-      </div>
-    </div>` : "";
+  const warnLines = warnings.map(w =>
+    `<li class="notice-line notice-line--warn">
+       <span class="notice-dot notice-dot--warn"></span>${escapeHtml(w)}
+     </li>`
+  ).join("");
+  const suggLines = suggestions.map(s =>
+    `<li class="notice-line notice-line--safe">
+       <span class="notice-dot notice-dot--safe"></span>${escapeHtml(s)}
+     </li>`
+  ).join("");
 
-  const suggestionsHtml = suggestions.length ? `
-    <div>
-      <div class="panel-list__title safe">${SVG.check} Recommendations</div>
-      <div class="panel-list__items">
-        ${suggestions.map(s => `<div class="panel-list__item safe">${escapeHtml(s)}</div>`).join("")}
-      </div>
+  const noticesHtml = (warnings.length || suggestions.length) ? `
+    <div class="notice-section">
+      ${warnings.length ? `
+        <div class="notice-group">
+          <span class="notice-group__label notice-group__label--warn">${SVG.warn} Warnings</span>
+          <ul class="notice-list">${warnLines}</ul>
+        </div>` : ""}
+      ${suggestions.length ? `
+        <div class="notice-group">
+          <span class="notice-group__label notice-group__label--safe">${SVG.check} Recommendations</span>
+          <ul class="notice-list">${suggLines}</ul>
+        </div>` : ""}
     </div>` : "";
 
   // Radiology panel - only shown if image was uploaded
@@ -522,8 +530,7 @@ function buildAnalysisPanel(data) {
         ${conflictsHtml}
         ${reasonsHtml}
         ${citationsHtml}
-        ${warningsHtml}
-        ${suggestionsHtml}
+        ${noticesHtml}
       </div>
     </div>`;
 }
@@ -557,7 +564,7 @@ function appendTypingIndicator() {
     <div class="msg-ai__inner">
       <div class="msg-ai__header">
         <div class="msg-ai__avatar">${SVG.shield}</div>
-        <span class="msg-ai__label">MedGemma Output</span>
+        <span class="msg-ai__label">HalluGuard-Med</span>
       </div>
       <div class="typing-indicator">
         <div class="typing-dot"></div>
@@ -585,7 +592,7 @@ function appendAIMessage(data) {
     <div class="msg-ai__inner">
       <div class="msg-ai__header">
         <div class="msg-ai__avatar">${SVG.shield}</div>
-        <span class="msg-ai__label">MedGemma Output</span>
+        <span class="msg-ai__label">HalluGuard-Med</span>
       </div>
       <div class="msg-ai__response">${escapeHtml(data.final_response)}</div>
       ${buildAnalysisPanel(data)}
@@ -671,42 +678,12 @@ function initAssistant() {
   const previewArea       = document.getElementById("image-preview-area");
   const previewImg        = document.getElementById("preview-img");
   const removeImgBtn      = document.getElementById("remove-img");
-  const backendUrlEl      = document.getElementById("backend-url");
-  const saveBackendUrlBtn = document.getElementById("save-backend-url");
-  const backendStatusEl   = document.getElementById("backend-status");
   const chips             = document.querySelectorAll(".suggestion-chip");
 
   if (!messagesEl) return;
 
   let pendingImage = null;
   let isTyping = false;
-
-  function setBackendStatus(text, state = "") {
-    if (!backendStatusEl) return;
-    backendStatusEl.textContent = text;
-    backendStatusEl.classList.remove("ok", "error");
-    if (state) backendStatusEl.classList.add(state);
-  }
-
-  function refreshBackendConfig() {
-    const savedUrl = normalizeBackendUrl(localStorage.getItem(BACKEND_URL_STORAGE_KEY));
-    if (backendUrlEl) backendUrlEl.value = savedUrl;
-    setBackendStatus(getBackendModeLabel(), savedUrl ? "ok" : "");
-  }
-
-  refreshBackendConfig();
-
-  if (saveBackendUrlBtn && backendUrlEl) {
-    saveBackendUrlBtn.addEventListener("click", () => {
-      const normalizedUrl = normalizeBackendUrl(backendUrlEl.value);
-      if (normalizedUrl) {
-        localStorage.setItem(BACKEND_URL_STORAGE_KEY, normalizedUrl);
-      } else {
-        localStorage.removeItem(BACKEND_URL_STORAGE_KEY);
-      }
-      refreshBackendConfig();
-    });
-  }
 
   chips.forEach(chip => {
     chip.addEventListener("click", () => {
@@ -793,7 +770,6 @@ function initAssistant() {
     getBackendResponse(text, imgToSend)
       .then(data => {
         removeTypingIndicator();
-        setBackendStatus(getBackendModeLabel(), "ok");
         // Report export integration: preserve the user query alongside the
         // completed HalluGuard response for PDF generation.
         data.query = displayText;
@@ -803,13 +779,11 @@ function initAssistant() {
         removeTypingIndicator();
         const apiError = error && error.payload && error.payload.error;
         if (apiError && apiError.code === "MEDGEMMA_UNAVAILABLE") {
-          setBackendStatus("MedGemma unavailable", "error");
           appendSystemWarning(
             "MedGemma model unavailable. No medical answer generated.",
             apiError.message || "The backend refused to generate a response because the real model is unavailable."
           );
         } else {
-          setBackendStatus("Backend unavailable", "error");
           appendSystemWarning(
             "Backend unavailable. No medical answer generated.",
             "The request could not reach the backend service. No substitute AI output was used."
